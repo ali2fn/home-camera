@@ -1,0 +1,201 @@
+```html
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>دوربین خانه</title>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+
+<body>
+
+    <h2>دوربین خانه</h2>
+
+    <video
+        id="video"
+        autoplay
+        playsinline
+        muted
+        style="width:100%; max-width:600px;">
+    </video>
+
+    <p id="status">در حال آماده‌سازی...</p>
+
+    <script>
+
+        // -----------------------------
+        // تنظیمات
+        // -----------------------------
+
+        const params = new URLSearchParams(window.location.search);
+
+        // اگر آدرس ?mode=view داشته باشد،
+        // دستگاه به عنوان بیننده کار می‌کند.
+        const isViewer = params.get("mode") === "view";
+
+        // شناسه مخصوص دوربین
+        // اگر قبلاً استفاده شده بود، یک اسم جدید بگذار.
+        const CAMERA_ID = "ali-camera-739284";
+
+
+        // -----------------------------
+        // عناصر صفحه
+        // -----------------------------
+
+        const video = document.getElementById("video");
+        const status = document.getElementById("status");
+
+
+        // -----------------------------
+        // ساخت Peer
+        // -----------------------------
+
+        const peer = new Peer(
+            isViewer
+                ? "viewer-" + Math.random().toString(36).substring(2, 10)
+                : CAMERA_ID
+        );
+
+
+        // -----------------------------
+        // وقتی Peer آماده شد
+        // -----------------------------
+
+        peer.on("open", function () {
+
+            console.log("Peer ID:", peer.id);
+
+            if (isViewer) {
+
+                // -----------------------------
+                // حالت بیننده
+                // -----------------------------
+
+                status.textContent =
+                    "📡 در حال اتصال به دوربین...";
+
+                // درخواست تماس تصویری
+                const call = peer.call(CAMERA_ID, null);
+
+                call.on("stream", function (stream) {
+
+                    video.srcObject = stream;
+
+                    status.textContent =
+                        "🟢 دوربین متصل شد!";
+
+                });
+
+                call.on("close", function () {
+
+                    status.textContent =
+                        "🔴 اتصال قطع شد.";
+
+                });
+
+                call.on("error", function (error) {
+
+                    console.error(error);
+
+                    status.textContent =
+                        "❌ خطا در دریافت تصویر.";
+
+                });
+
+            } else {
+
+                // -----------------------------
+                // حالت دوربین
+                // -----------------------------
+
+                startCamera();
+
+            }
+
+        });
+
+
+        // -----------------------------
+        // روشن کردن دوربین
+        // -----------------------------
+
+        function startCamera() {
+
+            status.textContent =
+                "در حال درخواست دسترسی به دوربین...";
+
+            navigator.mediaDevices.getUserMedia({
+
+                video: true,
+                audio: true
+
+            })
+
+            .then(function (stream) {
+
+                // نمایش تصویر دوربین روی دستگاه
+                video.srcObject = stream;
+
+                status.textContent =
+                    "🔴 دوربین فعال و آماده اتصال است.";
+
+                // وقتی Viewer تماس گرفت
+                peer.on("call", function (call) {
+
+                    console.log(
+                        "تماس از:",
+                        call.peer
+                    );
+
+                    // ارسال تصویر و صدا
+                    call.answer(stream);
+
+                });
+
+            })
+
+            .catch(function (error) {
+
+                console.error(error);
+
+                status.textContent =
+                    "❌ دسترسی به دوربین امکان‌پذیر نیست.";
+
+            });
+
+        }
+
+
+        // -----------------------------
+        // خطاهای PeerJS
+        // -----------------------------
+
+        peer.on("error", function (error) {
+
+            console.error(
+                "PeerJS Error:",
+                error
+            );
+
+            if (error.type === "unavailable-id") {
+
+                status.textContent =
+                    "❌ این شناسه دوربین قبلاً استفاده شده است.";
+
+            } else {
+
+                status.textContent =
+                    "❌ خطای PeerJS: " + error.type;
+
+            }
+
+        });
+
+    </script>
+
+</body>
+</html>
+```
