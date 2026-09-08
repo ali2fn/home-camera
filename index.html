@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 
@@ -31,6 +30,15 @@
             border-radius: 12px;
         }
 
+        button {
+            margin-top: 20px;
+            padding: 14px 25px;
+            font-size: 18px;
+            border: 0;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
         #status {
             font-size: 18px;
             margin-top: 15px;
@@ -42,358 +50,423 @@
 
     <h2>📷 دوربین خانه</h2>
 
-    <video
-        id="video"
-        autoplay
-        playsinline
-        muted>
-    </video>
+    <video id="video" autoplay playsinline muted></video>
 
     <p id="status">در حال آماده‌سازی...</p>
 
+    <button id="connectBtn" style="display:none;">
+        📡 اتصال به دوربین
+    </button>
 
 <script>
 
-    // ==========================================
-    // تنظیمات
-    // ==========================================
+const params = new URLSearchParams(window.location.search);
+const isViewer = params.get("mode") === "view";
 
-    const params = new URLSearchParams(window.location.search);
+const CAMERA_ID = "ali-home-camera-739284-x91";
 
-    const isViewer = params.get("mode") === "view";
-
-    // شناسه ثابت کامپیوتر دوربین
-    const CAMERA_ID = "ali-home-camera-739284-x91";
+const video = document.getElementById("video");
+const status = document.getElementById("status");
+const connectBtn = document.getElementById("connectBtn");
 
 
-    // ==========================================
-    // عناصر صفحه
-    // ==========================================
+/* ==============================
+   تنظیم WebRTC
+============================== */
 
-    const video = document.getElementById("video");
-    const status = document.getElementById("status");
+const peerConfig = {
+    debug: 2,
 
-
-    // ==========================================
-    // تنظیمات اتصال WebRTC
-    // ==========================================
-
-    const peerConfig = {
-        config: {
-            iceServers: [
-                {
-                    urls: "stun:stun.l.google.com:19302"
-                },
-                {
-                    urls: "stun:stun1.l.google.com:19302"
-                }
-            ]
-        }
-    };
+    config: {
+        iceServers: [
+            {
+                urls: "stun:stun.l.google.com:19302"
+            },
+            {
+                urls: "stun:stun1.l.google.com:19302"
+            }
+        ]
+    }
+};
 
 
-    // ==========================================
-    // ساخت Peer
-    // ==========================================
+/* ==============================
+   ساخت Peer
+============================== */
 
-    let peer;
+let peer;
+
+if (isViewer) {
+
+    peer = new Peer(
+        "viewer-" +
+        Math.random()
+            .toString(36)
+            .substring(2, 12),
+        peerConfig
+    );
+
+} else {
+
+    peer = new Peer(
+        CAMERA_ID,
+        peerConfig
+    );
+}
+
+
+/* ==============================
+   متغیر دوربین
+============================== */
+
+let cameraStream = null;
+let pendingCalls = [];
+
+
+/* ==============================
+   Peer آماده شد
+============================== */
+
+peer.on("open", function(id) {
+
+    console.log("Peer آماده شد:", id);
 
     if (isViewer) {
 
-        // موبایل فقط بیننده است
-        peer = new Peer(
-            "viewer-" +
-            Math.random()
-                .toString(36)
-                .substring(2, 12),
-            peerConfig
-        );
+        status.textContent =
+            "🟢 آماده اتصال";
+
+        connectBtn.style.display = "inline-block";
 
     } else {
 
-        // کامپیوتر دوربین
-        peer = new Peer(
-            CAMERA_ID,
-            peerConfig
-        );
-    }
-
-
-    // ==========================================
-    // Peer آماده شد
-    // ==========================================
-
-    peer.on("open", function (id) {
-
-        console.log("Peer connected:", id);
-
-        if (isViewer) {
-
-            startViewer();
-
-        } else {
-
-            startCamera();
-
-        }
-
-    });
-
-
-    // ==========================================
-    // حالت دوربین
-    // ==========================================
-
-    function startCamera() {
-
-        status.textContent =
-            "📷 در حال درخواست دسترسی به دوربین...";
-
-
-        navigator.mediaDevices.getUserMedia({
-
-            video: true,
-            audio: true
-
-        })
-
-        .then(function (stream) {
-
-            // نمایش تصویر روی کامپیوتر دوربین
-            video.srcObject = stream;
-
-            status.textContent =
-                "🟢 دوربین آماده اتصال است.";
-
-            console.log(
-                "Camera ready:",
-                peer.id
-            );
-
-
-            // ======================================
-            // دریافت درخواست بیننده
-            // ======================================
-
-            peer.on("call", function (call) {
-
-                console.log(
-                    "Viewer connected:",
-                    call.peer
-                );
-
-                status.textContent =
-                    "🟢 بیننده متصل شد.";
-
-                // ارسال دوربین
-                call.answer(stream);
-
-            });
-
-        })
-
-        .catch(function (error) {
-
-            console.error(
-                "Camera error:",
-                error
-            );
-
-            status.textContent =
-                "❌ دسترسی به دوربین داده نشد.";
-
-        });
+        startCamera();
 
     }
 
-
-    // ==========================================
-    // ساخت MediaStream آزمایشی برای بیننده
-    // ==========================================
-
-    function createViewerStream() {
-
-        const canvas =
-            document.createElement("canvas");
-
-        canvas.width = 2;
-        canvas.height = 2;
-
-        const ctx =
-            canvas.getContext("2d");
-
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, 2, 2);
-
-        // ساخت یک VideoTrack داخلی
-        const stream =
-            canvas.captureStream(5);
-
-        return stream;
-    }
+});
 
 
-    // ==========================================
-    // حالت بیننده
-    // ==========================================
+/* ==============================
+   دریافت تماس
+   خیلی مهم:
+   این قسمت بیرون startCamera است
+============================== */
 
-    function startViewer() {
+peer.on("call", function(call) {
 
-        status.textContent =
-            "📡 در حال اتصال به دوربین...";
+    console.log(
+        "📞 تماس دریافت شد:",
+        call.peer
+    );
 
+    if (cameraStream) {
 
         console.log(
-            "Trying to connect to:",
-            CAMERA_ID
+            "📷 ارسال تصویر دوربین"
+        );
+
+        call.answer(cameraStream);
+
+        status.textContent =
+            "🟢 بیننده متصل شد.";
+
+    } else {
+
+        console.log(
+            "⏳ دوربین هنوز آماده نیست."
+        );
+
+        pendingCalls.push(call);
+
+        status.textContent =
+            "⏳ در حال آماده‌سازی دوربین...";
+    }
+
+});
+
+
+/* ==============================
+   حالت دوربین
+============================== */
+
+function startCamera() {
+
+    status.textContent =
+        "📷 در حال درخواست دسترسی به دوربین...";
+
+    navigator.mediaDevices.getUserMedia({
+
+        video: true,
+        audio: true
+
+    })
+
+    .then(function(stream) {
+
+        cameraStream = stream;
+
+        video.srcObject = stream;
+
+        status.textContent =
+            "🟢 دوربین آماده اتصال است.";
+
+        console.log(
+            "Camera ready:",
+            peer.id
         );
 
 
-        // ساخت جریان کوچک داخلی
-        // موبایل نیازی به دوربین خودش ندارد
-        let viewerStream;
+        /* تماس‌هایی که زودتر رسیده بودند */
 
-        try {
-
-            viewerStream =
-                createViewerStream();
-
-        } catch (error) {
-
-            console.error(
-                "Viewer stream error:",
-                error
-            );
-
-            status.textContent =
-                "❌ مرورگر موبایل از این اتصال پشتیبانی نمی‌کند.";
-
-            return;
-        }
-
-
-        // ======================================
-        // برقراری تماس
-        // ======================================
-
-        const call =
-            peer.call(
-                CAMERA_ID,
-                viewerStream
-            );
-
-
-        // ======================================
-        // دریافت تصویر دوربین
-        // ======================================
-
-        call.on("stream", function (remoteStream) {
+        pendingCalls.forEach(function(call) {
 
             console.log(
-                "Camera stream received."
+                "📤 پاسخ به تماس منتظر"
             );
 
-            video.srcObject =
-                remoteStream;
-
-            status.textContent =
-                "🟢 دوربین متصل شد!";
+            call.answer(cameraStream);
 
         });
 
+        pendingCalls = [];
 
-        // ======================================
-        // اتصال قطع شد
-        // ======================================
+    })
 
-        call.on("close", function () {
-
-            status.textContent =
-                "🔴 اتصال قطع شد.";
-
-        });
-
-
-        // ======================================
-        // خطای تماس
-        // ======================================
-
-        call.on("error", function (error) {
-
-            console.error(
-                "Call error:",
-                error
-            );
-
-            status.textContent =
-                "❌ خطا در اتصال به دوربین.";
-
-        });
-
-    }
-
-
-    // ==========================================
-    // خطاهای PeerJS
-    // ==========================================
-
-    peer.on("error", function (error) {
+    .catch(function(error) {
 
         console.error(
-            "PeerJS Error:",
+            "Camera error:",
             error
         );
 
-
-        if (error.type === "unavailable-id") {
-
-            status.textContent =
-                "❌ شناسه دوربین قبلاً استفاده شده است.";
-
-        }
-
-        else if (error.type === "peer-unavailable") {
-
-            status.textContent =
-                "❌ کامپیوتر دوربین پیدا نشد.";
-
-        }
-
-        else if (error.type === "network") {
-
-            status.textContent =
-                "❌ مشکل شبکه وجود دارد.";
-
-        }
-
-        else {
-
-            status.textContent =
-                "❌ خطای اتصال: " +
-                error.type;
-
-        }
+        status.textContent =
+            "❌ دسترسی به دوربین داده نشد.";
 
     });
 
+}
 
-    // ==========================================
-    // قطع شدن اتصال Peer
-    // ==========================================
 
-    peer.on("disconnected", function () {
+/* ==============================
+   ساخت جریان آزمایشی بیننده
+============================== */
 
-        console.log(
-            "Peer disconnected"
+function createViewerStream() {
+
+    const canvas =
+        document.createElement("canvas");
+
+    canvas.width = 2;
+    canvas.height = 2;
+
+    const ctx =
+        canvas.getContext("2d");
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, 2, 2);
+
+    if (!canvas.captureStream) {
+
+        throw new Error(
+            "captureStream پشتیبانی نمی‌شود"
+        );
+
+    }
+
+    return canvas.captureStream(5);
+}
+
+
+/* ==============================
+   اتصال بیننده
+============================== */
+
+function connectToCamera() {
+
+    status.textContent =
+        "📡 در حال اتصال به دوربین...";
+
+    connectBtn.style.display = "none";
+
+    console.log(
+        "📡 اتصال به:",
+        CAMERA_ID
+    );
+
+
+    let viewerStream;
+
+    try {
+
+        viewerStream =
+            createViewerStream();
+
+    } catch (error) {
+
+        console.error(
+            error
         );
 
         status.textContent =
-            "🟠 اتصال به سرویس قطع شد.";
+            "❌ مرورگر از اتصال پشتیبانی نمی‌کند.";
+
+        connectBtn.style.display =
+            "inline-block";
+
+        return;
+    }
+
+
+    const call =
+        peer.call(
+            CAMERA_ID,
+            viewerStream
+        );
+
+
+    if (!call) {
+
+        status.textContent =
+            "❌ تماس ساخته نشد.";
+
+        connectBtn.style.display =
+            "inline-block";
+
+        return;
+    }
+
+
+    /* دریافت تصویر */
+
+    call.on("stream", function(remoteStream) {
+
+        console.log(
+            "🎥 تصویر دوربین دریافت شد"
+        );
+
+        video.srcObject =
+            remoteStream;
+
+        status.textContent =
+            "🟢 دوربین متصل شد!";
+
+        video.play().catch(function() {
+
+            console.log(
+                "برای پخش تصویر روی صفحه ضربه بزنید."
+            );
+
+        });
 
     });
+
+
+    /* اتصال قطع شد */
+
+    call.on("close", function() {
+
+        console.log(
+            "اتصال قطع شد"
+        );
+
+        status.textContent =
+            "🔴 اتصال قطع شد.";
+
+        connectBtn.style.display =
+            "inline-block";
+
+    });
+
+
+    /* خطای تماس */
+
+    call.on("error", function(error) {
+
+        console.error(
+            "Call error:",
+            error
+        );
+
+        status.textContent =
+            "❌ خطا در اتصال.";
+
+        connectBtn.style.display =
+            "inline-block";
+
+    });
+
+}
+
+
+/* ==============================
+   دکمه اتصال
+============================== */
+
+connectBtn.addEventListener(
+    "click",
+    connectToCamera
+);
+
+
+/* ==============================
+   خطاهای PeerJS
+============================== */
+
+peer.on("error", function(error) {
+
+    console.error(
+        "PeerJS Error:",
+        error
+    );
+
+    if (error.type === "unavailable-id") {
+
+        status.textContent =
+            "❌ این دوربین قبلاً باز است.";
+
+    }
+
+    else if (error.type === "peer-unavailable") {
+
+        status.textContent =
+            "❌ کامپیوتر دوربین پیدا نشد.";
+
+    }
+
+    else if (error.type === "network") {
+
+        status.textContent =
+            "❌ مشکل شبکه.";
+
+    }
+
+    else {
+
+        status.textContent =
+            "❌ خطا: " + error.type;
+
+    }
+
+});
+
+
+/* ==============================
+   قطع Peer
+============================== */
+
+peer.on("disconnected", function() {
+
+    console.log(
+        "Peer disconnected"
+    );
+
+    status.textContent =
+        "🟠 اتصال به سرویس قطع شد.";
+
+});
 
 </script>
 
 </body>
 </html>
-```
